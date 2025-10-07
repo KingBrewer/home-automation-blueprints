@@ -1,0 +1,118 @@
+blueprint:
+  name: TRV External Temperature Calibration
+  description: >
+    Automatically update Sonoff TRV external temperature sensor value
+    when the room temperature sensor reading changes. This blueprint creates
+    an automation that monitors your temperature sensor and updates the TRV's
+    external temperature calibration accordingly.
+  domain: automation
+  input:
+    trv_climate_entity:
+      name: TRV Climate Entity
+      description: The Sonoff TRV climate entity to calibrate
+      selector:
+        entity:
+          domain: climate
+    temperature_sensor:
+      name: Temperature Sensor
+      description: The temperature sensor entity to use for calibration
+      selector:
+        entity:
+          domain: sensor
+          device_class: temperature
+    temperature_offset:
+      name: Temperature Offset
+      description: Offset to apply to the temperature reading (optional)
+      default: 0
+      selector:
+        number:
+          min: -10
+          max: 10
+          unit_of_measurement: "°C"
+          mode: slider
+          step: 0.1
+    min_change:
+      name: Minimum Temperature Change
+      description: Minimum temperature change to trigger update (prevents excessive updates)
+      default: 0.1
+      selector:
+        number:
+          min: 0.1
+          max: 2.0
+          unit_of_measurement: "°C"
+          mode: slider
+          step: 0.1
+
+trigger:
+  - platform: state
+    entity_id: !input temperature_sensor
+    not_from:
+      - "unknown"
+      - "unavailable"
+    not_to:
+      - "unknown"
+      - "unavailable"
+
+condition:
+  - condition: template
+    value_template: >
+      {% set sensor_temp = states(trigger.entity_id) | float(0) %}
+      {% set old_temp = trigger.from_state.state | float(0) %}
+      {% set min_change = !input min_change %}
+      {{ (sensor_temp - old_temp) | abs >= min_change }}
+
+action:
+  - variables:
+      trv_entity: !input trv_climate_entity
+      sensor_temp: "{{ states(trigger.entity_id) | float(0) }}"
+      offset: !input temperature_offset
+      calibrated_temp: "{{ (sensor_temp + offset) | round(1) }}"
+      temp_value: "{{ (calibrated_temp * 100) | int }}"
+
+  # Method 1: Try using number entity if available
+  - if:
+      - condition: template
+        value_template: >
+          {{ states('number.' + trv_entity.split('.')[1] + '_external_temperature_sensor') != 'unknown' }}
+    then:
+      - service: number.set_value
+        target:
+          entity_id: "number.{{ trv_entity.split('.')[1] }}_external_temperature_sensor"
+        data:
+          value: "{{ calibrated_temp }}"
+    else:
+      # Method 2: Use ZHA cluster attribute if number entity doesn't exist
+      - service: zha.set_zigbee_cluster_attribute
+        target:
+          entity_id: "{{ trv_entity }}"
+        data:
+          endpoint_id: 1
+          cluster_id: 513
+          cluster_type: in
+          attribute: 17
+          value: "{{ temp_value }}"
+          manufacturer: null
+
+  # Alternative method 3: Try using select entity for external temperature sensor
+  - if:
+      - condition: template
+        value_template: >
+          {{ states('select.' + trv_entity.split('.')[1] + '_external_temperature_sensor') != 'unknown' }}
+    then:
+      - service: select.select_option
+        target:
+          entity_id: "select.{{ trv_entity.split('.')[1] }}_external_temperature_sensor"
+        data:
+          option: "{{ calibrated_temp }}"
+        continue_on_error: true
+
+  # Log the calibration action
+  - service: logbook.log
+    data:
+      name: TRV Temperature Calibration
+      message: >
+        Updated {{ trv_entity }} external temperature to {{ calibrated_temp }}°C
+        (sensor reading: {{ sensor_temp }}°C, offset: {{ offset }}°C)
+      entity_id: "{{ trv_entity }}"
+
+mode: single

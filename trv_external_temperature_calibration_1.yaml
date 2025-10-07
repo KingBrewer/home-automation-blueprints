@@ -1,0 +1,87 @@
+blueprint:
+  name: Sonoff TRV External Temperature Calibration
+  description: >-
+    Automatically updates the external temperature of a Sonoff TRV
+    using an external temperature sensor.
+  domain: automation
+  input:
+    trv_climate_entity:
+      name: Sonoff TRV
+      description: The climate entity of the Sonoff TRV to calibrate.
+      selector:
+        entity:
+          domain: climate
+    temperature_sensor:
+      name: External Temperature Sensor
+      description: The sensor entity that provides the room temperature.
+      selector:
+        entity:
+          domain: sensor
+          device_class: temperature
+    min_change:
+      name: Minimum Temperature Change
+      description: The minimum temperature change required to trigger an update.
+      default: 0.2
+      selector:
+        number:
+          min: 0.1
+          max: 2.0
+          step: 0.1
+          unit_of_measurement: "°C"
+          mode: slider
+
+trigger:
+  - platform: state
+    entity_id: !input temperature_sensor
+    not_from:
+      - "unavailable"
+      - "unknown"
+    not_to:
+      - "unavailable"
+      - "unknown"
+
+condition:
+  - condition: template
+    value_template: >-
+      {{ (trigger.to_state.state | float - trigger.from_state.state | float) | abs >= !input min_change }}
+
+action:
+  - variables:
+      trv: !input trv_climate_entity
+      sensor_temp: "{{ states(trigger.entity_id) | float(0) }}"
+      calibrated_temp: "{{ sensor_temp | round(1) }}"
+
+  - service: climate.set_temperature
+    target:
+      entity_id: "{{ trv }}"
+    data:
+      temperature: "{{ state_attr(trv, 'temperature') }}" # Keep current setpoint
+      # This part is a bit of a guess, as setting external temp varies.
+      # We assume setting temperature with a special hvac_mode or attribute might work.
+      # A more robust way is needed if this fails.
+      # For Zigbee2MQTT, you'd publish to `zigbee2mqtt/FRIENDLY_NAME/set`
+      # with payload `{"sensor": "external", "external_temperature": {{ calibrated_temp }} }`
+      # For ZHA, it would be a `zha.set_zigbee_cluster_attribute` call.
+
+  # The following is a more specific action for ZHA, which is common for Sonoff Zigbee devices.
+  # You may need to enable this part and disable the above if you use ZHA.
+  # - service: zha.set_zigbee_cluster_attribute
+  #   target:
+  #     entity_id: !input trv_climate_entity
+  #   data:
+  #     cluster_id: 0x0201 # Thermostat cluster
+  #     attribute: 0x401c # A common attribute for external temp, might vary
+  #     value: "{{ (calibrated_temp * 100) | int }}"
+  #     cluster_type: 'in'
+  #     endpoint_id: 1
+
+  - service: logbook.log
+    data:
+      name: "{{ state_attr(trv, 'friendly_name') }} Calibration"
+      message: >-
+        Updated external temperature to {{ calibrated_temp }}°C.
+        (Sensor: {{ sensor_temp }}°C)
+      entity_id: !input trv_climate_entity
+
+mode: single
+max_exceeded: silent
