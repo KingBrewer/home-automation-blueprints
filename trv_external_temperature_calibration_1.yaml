@@ -13,8 +13,8 @@ blueprint:
           device_class:
           - temperature
           multiple: false
-    climate_names:
-      name: Climate entries
+    trv_names:
+      name: TRV entries
       description: This will be the Sonoff TRVs that will be calibrated using the external sensor.
       selector:
         entity:
@@ -36,7 +36,7 @@ blueprint:
 alias: Calibrate Sonoff TRVs
 description: ''
 variables:
-  climate_names: !input climate_names
+  trv_names: !input trv_names
   external_temperature: !input external_temp
   min_temperature_change: !input min_change
 trigger:
@@ -48,7 +48,7 @@ trigger:
     seconds: 15
     milliseconds: 0
 - platform: state
-  entity_id: !input climate_names
+  entity_id: !input trv_names
   for:
     hours: 0
     minutes: 0
@@ -63,16 +63,16 @@ condition:
     value_template: '{{ states(external_temperature) != ''unknown'' }}'
 action:
 - repeat:
-    for_each: "{{ climate_names }}"
+    for_each: "{{ trv_names }}"
     sequence:
     - variables:
-        climate_name: "{{ repeat.item }}"
-        device_external_entity: "number.{{ climate_name.removeprefix('climate.') }}_external_temperature_sensor_value"
-        device_external_temp: "{{ states(device_external_entity) | float() }}"
+        trv_name: "{{ repeat.item }}"
+        trv_external_entity: "number.{{ trv_name.removeprefix('climate.') }}_external_temperature_sensor_value"
+        trv_external_temp: "{{ states(trv_external_entity) | float() }}"
         sensor_external_temp: "{{ states(external_temperature) | float() }}"
-        local_temp: "{{ state_attr(climate_name, 'current_temperature') | float() }}"
-        target_temp: "{{ state_attr(climate_name, 'temperature') | float() }}"
-        temp_diff: "{{ (sensor_external_temp - device_external_temp) | abs() }}"
+        local_temp: "{{ state_attr(trv_name, 'current_temperature') | float() }}"
+        target_temp: "{{ state_attr(trv_name, 'temperature') | float() }}"
+        temp_diff: "{{ (sensor_external_temp - trv_external_temp) | abs() }}"
 
     - alias: "check if calibration needs change"
       condition: template
@@ -88,7 +88,7 @@ action:
       data:
         name: "Calibration Update"
         message: >-
-          Calibrating {{ climate_name }}. External sensor is {{ sensor_external_temp }}°C.
+          Calibrating {{ trv_name }}. External sensor is {{ sensor_external_temp }}°C.
           Previous TRV external value was {{ device_external_temp }}°C.
           Setting new value on {{ device_external_entity }}.
 
