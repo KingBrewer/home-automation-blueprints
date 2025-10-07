@@ -29,20 +29,15 @@ trigger:
       - "unknown"
 
 action:
-  - variables:
-      trv_object_id: "{{ states[trv_climate_entity].object_id }}"
-      number_entity: "number.{{ trv_object_id }}_external_temperature_sensor_value"
-      new_temp: "{{ trigger.to_state.state | float }}"
   - service: number.set_value
     target:
-      entity_id: "{{ number_entity }}"
+      entity_id: "number.{{ state_attr(!input trv_climate_entity, 'object_id') }}_external_temperature_sensor"
     data:
-      value: "{{ new_temp }}"
+      value: "{{ trigger.to_state.state | float }}"
   - service: logbook.log
     data:
-      name: "{{ states[trv_climate_entity].name }} Temperature Sync"
-      message: "Set external temperature to {{ new_temp }}°C."
+      name: "{{ state_attr(!input trv_climate_entity, 'friendly_name') }} Temperature Sync"
+      message: "Set external temperature to {{ trigger.to_state.state }}°C."
       entity_id: !input trv_climate_entity
 
 mode: single
-max_exceeded: silent
