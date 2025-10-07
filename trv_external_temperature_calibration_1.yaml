@@ -43,7 +43,8 @@ trigger:
 condition:
   - condition: template
     value_template: >-
-      {{ (trigger.to_state.state | float - trigger.from_state.state | float) | abs >= !input min_change }}
+      {% set min_change = !input min_change %}
+      {{ (trigger.to_state.state | float - trigger.from_state.state | float) | abs >= min_change }}
 
 action:
   - variables:
