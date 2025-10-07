@@ -30,6 +30,9 @@ blueprint:
           unit_of_measurement: "°C"
           mode: slider
 
+variables:
+  min_change_var: !input min_change
+
 trigger:
   - platform: state
     entity_id: !input temperature_sensor
@@ -43,8 +46,7 @@ trigger:
 condition:
   - condition: template
     value_template: >-
-      {% set min_change = !input min_change %}
-      {{ (trigger.to_state.state | float - trigger.from_state.state | float) | abs >= min_change }}
+      {{ (trigger.to_state.state | float - trigger.from_state.state | float) | abs >= min_change_var }}
 
 action:
   - variables:
