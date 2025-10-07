@@ -67,8 +67,7 @@ action:
     sequence:
     - variables:
         trv_name: "{{ repeat.item }}"
-        trv_external_entity: "number.sonoff_trvzb_external_temperature_sensor_value"
-        ##trv_external_entity: "number.{{ trv_name.removeprefix('climate.') }}_external_temperature_sensor_value"
+        trv_external_entity: "number.{{ trv_name.removeprefix('climate.') }}_external_temperature_sensor_value"
         trv_external_temp: "{{ states(trv_external_entity) | float() }}"
         sensor_external_temp: "{{ states(external_temperature) | float() }}"
         local_temp: "{{ state_attr(trv_name, 'current_temperature') | float() }}"
