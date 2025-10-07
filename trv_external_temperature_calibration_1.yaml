@@ -29,15 +29,24 @@ trigger:
       - "unknown"
 
 action:
+  - variables:
+      # Get the object_id from the selected climate entity.
+      # The object_id is the part of the entity_id after the "climate."
+      trv_object_id: "{{ states[(!input trv_climate_entity)].object_id }}"
+
+      # Construct the full entity_id for the number entity we want to update.
+      target_number_entity: "number.{{ trv_object_id }}_external_temperature_sensor"
+
   - service: number.set_value
     target:
-      entity_id: "number.{{ state_attr(!input trv_climate_entity, 'object_id') }}_external_temperature_sensor"
+      entity_id: "{{ target_number_entity }}"
     data:
       value: "{{ trigger.to_state.state | float }}"
+
   - service: logbook.log
     data:
       name: "{{ state_attr(!input trv_climate_entity, 'friendly_name') }} Temperature Sync"
-      message: "Set external temperature to {{ trigger.to_state.state }}°C."
+      message: "Set external temperature on {{ target_number_entity }} to {{ trigger.to_state.state }}°C."
       entity_id: !input trv_climate_entity
 
 mode: single
