@@ -76,7 +76,7 @@ action:
 
     - alias: "check if calibration needs change"
       condition: template
-      value_template: "{{ (temp_diff | round(1) >= min_temperature_change }}"
+      value_template: "{{ (temp_diff | round(1)) >= min_temperature_change }}"
 
     - service: number.set_value
       target:
