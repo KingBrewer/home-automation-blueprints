@@ -1,52 +1,96 @@
 blueprint:
-  name: Simple TRV External Temperature Sync
-  description: >-
-    Updates a TRV's external temperature from a sensor every time the sensor's value changes.
+  name: Calibrate Sonoff TRV external temperature
+  description: Calibrate Sonoff TRV internal temperature according to external temperature sensor
   domain: automation
   input:
-    trv_climate_entity:
-      name: Sonoff TRV
-      description: The climate entity of the Sonoff TRV.
+    external_temp:
+      name: Select the external temp sensor
+      description: This will be your external temp sensor.
       selector:
         entity:
-          domain: climate
-    temperature_sensor:
-      name: External Temperature Sensor
-      description: The sensor entity that provides the room temperature.
+          domain:
+          - sensor
+          device_class:
+          - temperature
+          multiple: false
+    climate_names:
+      name: Climate entries
+      description: This will be the Sonoff TRVs that will be calibrated using the external sensor.
       selector:
         entity:
-          domain: sensor
-          device_class: temperature
-
+          domain:
+          - climate
+          multiple: true
+    min_change:
+      name: Minimum Temperature Change
+      description: Minimum temperature change to trigger update (prevents excessive updates)
+      default: 0.3
+      selector:
+        number:
+          min: 0.1
+          max: 2.0
+          unit_of_measurement: "°C"
+          mode: slider
+          step: 0.1
+  source_url: https://github.com/kvanbiesen/HASonoffAutomation/SyncexternaltempSonoff.yaml
+alias: Calibrate Sonoff TRVs
+description: ''
+variables:
+  climate_names: !input climate_names
+  external_temperature: !input external_temp
+  min_temperature_change: !input min_change
 trigger:
-  - platform: state
-    entity_id: !input temperature_sensor
-    not_from:
-      - "unavailable"
-      - "unknown"
-    not_to:
-      - "unavailable"
-      - "unknown"
-
+- platform: state
+  entity_id: !input external_temp
+  for:
+    hours: 0
+    minutes: 0
+    seconds: 15
+    milliseconds: 0
+- platform: state
+  entity_id: !input climate_names
+  for:
+    hours: 0
+    minutes: 0
+    seconds: 15
+    milliseconds: 0
+condition:
+  condition: and
+  conditions:
+  - condition: template
+    value_template: '{{ states(external_temperature) != ''unavailable'' }}'
+  - condition: template
+    value_template: '{{ states(external_temperature) != ''unknown'' }}'
 action:
-  - variables:
-      # Get the object_id from the selected climate entity.
-      # The object_id is the part of the entity_id after the "climate."
-      trv_object_id: "{{ states[(!input trv_climate_entity)].object_id }}"
+- repeat:
+    for_each: "{{ climate_names }}"
+    sequence:
+    - variables:
+        climate_name: "{{ repeat.item }}"
+        device_external_entity: "number.{{ climate_name.removeprefix('climate.') }}_external_temperature_sensor_value"
+        device_external_temp: "{{ states(device_external_entity) | float() }}"
+        sensor_external_temp: "{{ states(external_temperature) | float() }}"
+        local_temp: "{{ state_attr(climate_name, 'current_temperature') | float() }}"
+        target_temp: "{{ state_attr(climate_name, 'temperature') | float() }}"
+        temp_diff: "{{ (sensor_external_temp - device_external_temp) | abs() }}"
 
-      # Construct the full entity_id for the number entity we want to update.
-      target_number_entity: "number.{{ trv_object_id }}_external_temperature_sensor"
+    - alias: "check if calibration needs change"
+      condition: template
+      value_template: "{{ (temp_diff | round(1) >= min_temperature_change }}"
 
-  - service: number.set_value
-    target:
-      entity_id: "{{ target_number_entity }}"
-    data:
-      value: "{{ trigger.to_state.state | float }}"
+    - service: number.set_value
+      target:
+        entity_id: "{{ device_external_entity }}"
+      data:
+        value: "{{ sensor_external_temp }}"
 
-  - service: logbook.log
-    data:
-      name: "{{ state_attr(!input trv_climate_entity, 'friendly_name') }} Temperature Sync"
-      message: "Set external temperature on {{ target_number_entity }} to {{ trigger.to_state.state }}°C."
-      entity_id: !input trv_climate_entity
+    - service: logbook.log
+      data:
+      message: >-
+        Calibrating {{ climate_name }}. External sensor is {{ sensor_external_temp }}°C.
+        Previous TRV external value was {{ device_external_temp }}°C.
+        Setting new value on {{ device_external_entity }}.
 
+- delay: 5
 mode: single
+max_exceeded: silent
