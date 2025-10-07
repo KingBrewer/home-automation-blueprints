@@ -86,10 +86,11 @@ action:
 
     - service: logbook.log
       data:
-      message: >-
-        Calibrating {{ climate_name }}. External sensor is {{ sensor_external_temp }}°C.
-        Previous TRV external value was {{ device_external_temp }}°C.
-        Setting new value on {{ device_external_entity }}.
+        name: "Calibration Update"
+        message: >-
+          Calibrating {{ climate_name }}. External sensor is {{ sensor_external_temp }}°C.
+          Previous TRV external value was {{ device_external_temp }}°C.
+          Setting new value on {{ device_external_entity }}.
 
 - delay: 5
 mode: single
