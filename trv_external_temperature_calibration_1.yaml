@@ -79,19 +79,20 @@ action:
       condition: template
       value_template: "{{ (temp_diff | round(1)) >= min_temperature_change }}"
 
-    - service: number.set_value
-      target:
-        entity_id: "{{ device_external_entity }}"
-      data:
-        value: "{{ sensor_external_temp }}"
-
     - service: logbook.log
       data:
         name: "Calibration Update"
         message: >-
           Calibrating {{ trv_name }}. External sensor is {{ sensor_external_temp }}°C.
-          Previous TRV external value was {{ device_external_temp }}°C.
-          Setting new value on {{ device_external_entity }}.
+          Previous TRV external value was {{ trv_external_temp }}°C.
+          Setting new value on {{ trv_external_entity }}.
+
+
+    - service: number.set_value
+      target:
+        entity_id: "{{ trv_external_entity }}"
+      data:
+        value: "{{ sensor_external_temp }}"
 
 - delay: 5
 mode: single
